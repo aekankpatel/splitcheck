@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Splitcheck</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Splitcheck</h1>
+      <p>
+        Plan an experiment, analyze results with frequentist and Bayesian
+        methods, and see for yourself why "peeking" wrecks your false-positive
+        rate.
+      </p>
+    </header>
+
+    <main>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="view-size" role="tab">
+          1. Plan (sample size)
+        </button>
+        <button class="tab" data-tab="view-analyze" role="tab">
+          2. Analyze results
+        </button>
+        <button class="tab" data-tab="view-peek" role="tab">
+          3. Why peeking is bad
+        </button>
+      </div>
+
+      <!-- 1. Sample size ------------------------------------------------- -->
+      <section id="view-size" class="view active">
+        <div class="panel">
+          <h2>Required sample size</h2>
+          <p class="lede">
+            Answers "how many visitors do I need per arm to detect this lift?"
+            based on a two-sided z-test for two proportions.
+          </p>
+          <div class="grid">
+            <div>
+              <label for="size-baseline">Baseline conversion (%)</label>
+              <input id="size-baseline" type="number" value="5" step="0.1" min="0.01" max="99" />
+            </div>
+            <div>
+              <label for="size-mde">Minimum detectable lift (relative %)</label>
+              <input id="size-mde" type="number" value="10" step="0.5" min="0.1" />
+            </div>
+            <div>
+              <label for="size-alpha">Significance α</label>
+              <select id="size-alpha">
+                <option value="0.05" selected>0.05 (95% confidence)</option>
+                <option value="0.01">0.01 (99% confidence)</option>
+                <option value="0.10">0.10 (90% confidence)</option>
+              </select>
+            </div>
+            <div>
+              <label for="size-power">Statistical power (1 − β)</label>
+              <select id="size-power">
+                <option value="0.8" selected>0.80</option>
+                <option value="0.9">0.90</option>
+                <option value="0.95">0.95</option>
+              </select>
+            </div>
+          </div>
+          <button id="size-run" class="primary">Calculate</button>
+          <div id="size-out" class="result hidden"></div>
+        </div>
+      </section>
+
+      <!-- 2. Analyze ----------------------------------------------------- -->
+      <section id="view-analyze" class="view">
+        <div class="panel">
+          <h2>Analyze completed experiment</h2>
+          <p class="lede">
+            Enter the totals from A and B. You get a frequentist z-test <em>and</em>
+            a Bayesian Beta-Binomial analysis side-by-side.
+          </p>
+          <div class="two-col">
+            <div class="col a">
+              <h3>Variant A (control)</h3>
+              <label for="nA">Visitors</label>
+              <input id="nA" type="number" value="10000" min="1" />
+              <label for="xA" style="margin-top: 8px;">Conversions</label>
+              <input id="xA" type="number" value="500" min="0" />
+            </div>
+            <div class="col b">
+              <h3>Variant B (treatment)</h3>
+              <label for="nB">Visitors</label>
+              <input id="nB" type="number" value="10000" min="1" />
+              <label for="xB" style="margin-top: 8px;">Conversions</label>
+              <input id="xB" type="number" value="560" min="0" />
+            </div>
+          </div>
+          <div class="grid" style="margin-top: 12px;">
+            <div>
+              <label for="analyze-alpha">Significance α</label>
+              <select id="analyze-alpha">
+                <option value="0.05" selected>0.05</option>
+                <option value="0.01">0.01</option>
+                <option value="0.10">0.10</option>
+              </select>
+            </div>
+            <div>
+              <label for="analyze-split">Expected split (A%)</label>
+              <input id="analyze-split" type="number" value="50" step="1" min="1" max="99" />
+            </div>
+            <div>
+              <label for="analyze-tau">Always-valid prior scale τ (abs)</label>
+              <input id="analyze-tau" type="number" value="0.02" step="0.005" min="0.001" max="0.5" />
+            </div>
+          </div>
+          <button id="analyze-run" class="primary">Analyze</button>
+          <div id="analyze-out" class="result hidden"></div>
+        </div>
+      </section>
+
+      <!-- 3. Peeking ----------------------------------------------------- -->
+      <section id="view-peek" class="view">
+        <div class="panel">
+          <h2>The peeking problem</h2>
+          <p class="lede">
+            Simulate an experiment where <strong>A and B are truly identical</strong>.
+            Compare an honest experimenter (one test at the end) against a peeker
+            (checks repeatedly, stops on first "significant" result).
+          </p>
+          <div class="grid">
+            <div>
+              <label for="peek-rate">True conversion rate (both arms) (%)</label>
+              <input id="peek-rate" type="number" value="10" step="0.1" min="0.1" max="99" />
+            </div>
+            <div>
+              <label for="peek-n">Max visitors per arm</label>
+              <input id="peek-n" type="number" value="5000" min="100" step="100" />
+            </div>
+            <div>
+              <label for="peek-freq">Check every N visitors</label>
+              <input id="peek-freq" type="number" value="100" min="10" step="10" />
+            </div>
+            <div>
+              <label for="peek-trials">Trials</label>
+              <input id="peek-trials" type="number" value="500" min="50" step="50" />
+            </div>
+            <div>
+              <label for="peek-alpha">Significance α</label>
+              <select id="peek-alpha">
+                <option value="0.05" selected>0.05</option>
+                <option value="0.01">0.01</option>
+                <option value="0.10">0.10</option>
+              </select>
+            </div>
+            <div>
+              <label for="peek-tau">mSPRT prior scale τ (abs)</label>
+              <input id="peek-tau" type="number" value="0.01" step="0.005" min="0.001" max="0.5" />
+            </div>
+          </div>
+          <button id="peek-run" class="primary">Run simulation</button>
+          <div id="peek-out" class="result hidden"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Zero dependencies. Open <code>index.html</code> directly, or run
+      <code>python3 -m http.server</code> from this folder. For CSV data, see
+      <code>analyze.py</code>.
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
