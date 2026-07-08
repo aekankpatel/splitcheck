@@ -30,6 +30,7 @@ Everything renders in a browser with no build step. The Python CLI reads a
   - [4. Sampling Beta variates: Marsaglia-Tsang](#4-sampling-beta-variates-marsaglia-tsang)
   - [5. Always-valid inference: mSPRT](#5-always-valid-inference-msprt)
   - [6. Sample Ratio Mismatch: chi-square](#6-sample-ratio-mismatch-chi-square)
+- [Worked example: `sample_data.csv`](#worked-example-sample_datacsv)
 - [Design decisions](#design-decisions)
 - [What Splitcheck is NOT](#what-splitcheck-is-not)
 - [Files](#files)
@@ -353,6 +354,28 @@ wider. That's the price of anytime-validity — no free lunch.
 Implementation: [`stats.js:alwaysValidInference`](stats.js) /
 [`analyze.py:always_valid`](analyze.py).
 
+**How to pick τ in practice.** τ is a *modeling* choice, not a truth. The
+always-valid guarantee holds for any τ > 0 — only power depends on it.
+
+- **Match your MDE.** If you'd have planned the experiment around a 1
+  percentage-point absolute lift, set `τ ≈ 0.01`. Effects near your MDE
+  detect with something close to the fixed-horizon power.
+- **Rule of thumb: `τ ≈ 5% · p̂_baseline`.** For a 5% baseline, `τ ≈ 0.0025`;
+  for a 20% baseline, `τ ≈ 0.01`. Scales the prior with what "a meaningful
+  lift" looks like at that baseline.
+- **Too small.** The mixture concentrates near δ = 0, so genuinely large
+  effects look surprising even under the alternative and Λ stays small.
+  You lose power on the wins that matter most.
+- **Too big.** The mixture spreads mass over effects you'd never see, and
+  the small effects you do see get down-weighted. You lose power on realistic
+  lifts.
+- **Never set τ = 0.** That collapses the mixture to a point mass at H₀
+  and Λ ≡ 1. The test never rejects.
+- **Optimizely-style: pick τ per-metric from historical variance.** If
+  you have prior experiments on the same metric, set τ to the standard
+  deviation of past observed lifts. Splitcheck doesn't do this
+  automatically — but it's what you'd do to tune it.
+
 ### 6. Sample Ratio Mismatch: chi-square
 
 **The check.** For a target split `r_A : r_B` (say 0.5 : 0.5) and observed
@@ -387,6 +410,92 @@ trust the metric analysis until you find and fix it.
 
 Implementation: [`stats.js:srmCheck`, `chiSqSurvival1`](stats.js) /
 [`analyze.py:srm_check`](analyze.py).
+
+---
+
+## Worked example: `sample_data.csv`
+
+Everything above stays abstract until you see it on real numbers. Here's the
+shipped 20,000-event synthetic dataset (baseline 5.0%, treatment 5.6%, seed
+42) run through every formula by hand.
+
+**Data.**
+
+```
+A: n_A = 10,000   x_A = 456   p̂_A = 0.04560
+B: n_B = 10,000   x_B = 557   p̂_B = 0.05570
+Δ̂ = p̂_B - p̂_A = 0.01010    (1.01 percentage points, 22.15% relative lift)
+```
+
+**SRM check.** Expected 50/50 split, so `E_A = E_B = 10,000` exactly.
+
+```
+χ² = (10000 - 10000)²/10000 + (10000 - 10000)²/10000  =  0
+p  = 2·(1 - Φ(0))  =  1
+```
+
+Assignment OK. Proceed.
+
+**Frequentist z-test.** Pooled proportion, pooled SE for the test:
+
+```
+p̂    = (456 + 557) / 20000                          =  0.05065
+SE₀  = √[ 0.05065 · 0.94935 · (1/10000 + 1/10000) ]  =  0.003101
+z    = 0.01010 / 0.003101                            =  3.257
+p    = 2·(1 - Φ(3.257))                              =  0.001126
+```
+
+Unpooled SE for the CI:
+
+```
+SE_Δ = √[ 0.04560·0.95440/10000 + 0.05570·0.94430/10000 ]  =  0.003100
+CI   = 0.01010 ± 1.960 · 0.003100                            =  [0.402%, 1.618%]
+```
+
+Verdict at α = 0.05: **SIGNIFICANT.**
+
+**Always-valid (mSPRT), τ = 0.02.**
+
+```
+V     = SE_Δ²  =  9.61 × 10⁻⁶
+τ²    = 4.00 × 10⁻⁴
+V/(V+τ²)     =  0.02347
+log Λ = ½·log(0.02347) + (0.01010² · τ²) / (2 V (V+τ²))
+      = -1.876 + 5.183
+      =  3.307
+p*    = e^(-3.307)  =  0.0367
+```
+
+Confidence sequence half-width:
+
+```
+w = √[ 2V(V+τ²)/τ² · ( log(1/0.05) + ½·log((V+τ²)/V) ) ]
+  = √[ 1.968 × 10⁻⁵ · (2.996 + 1.876) ]
+  = 0.00979
+CS = 0.01010 ± 0.00979  =  [0.031%, 1.989%]
+```
+
+The CS is ~60% wider than the fixed-horizon CI — that's the peek-tolerance tax.
+
+**Bayesian.** Posteriors (flat prior):
+
+```
+p_A | data ~ Beta(1 + 456, 1 + 9544)  =  Beta(457, 9545)
+p_B | data ~ Beta(1 + 557, 1 + 9443)  =  Beta(558, 9444)
+```
+
+Monte Carlo (20k draws):
+
+```
+P(B > A)                =  100.0%     (all draws had p_B > p_A)
+E[loss | pick A]        =  1.011%     ≈ the true lift
+E[loss | pick B]        =  0.000%
+95% CrI on p_A          =  [4.17%, 4.99%]
+95% CrI on p_B          =  [5.14%, 6.04%]
+```
+
+All four frames agree: **B wins.** Numbers here match the Python CLI
+(`python3 analyze.py sample_data.csv --seed 1`) to the last printed digit.
 
 ---
 
